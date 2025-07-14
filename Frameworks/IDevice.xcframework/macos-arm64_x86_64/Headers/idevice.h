@@ -1680,6 +1680,7 @@ struct IdeviceFfiError *lockdownd_get_value(struct LockdowndClientHandle *client
  * `out_plist` must be a valid pointer to store the plist
  */
 struct IdeviceFfiError *lockdownd_get_all_values(struct LockdowndClientHandle *client,
+                                                 const char *domain,
                                                  void **out_plist);
 
 /**
