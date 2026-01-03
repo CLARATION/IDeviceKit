@@ -31,7 +31,7 @@ public class InstallerStatusViewModel: ObservableObject {
 		if isIDevice {
 			(installProgress + uploadProgress + packageProgress) / 3.0
 		} else {
-			packageProgress
+			(installProgress + packageProgress) / 2.0
 		}
 	}
 	
