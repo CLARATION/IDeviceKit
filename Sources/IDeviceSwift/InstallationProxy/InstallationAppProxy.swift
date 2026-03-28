@@ -36,15 +36,7 @@ public class InstallationAppProxy: NSObject {
 			}
 			
 			if self._heartbeat.isRsd {
-				guard let adapter = self._heartbeat.adapter else {
-					throw IDeviceSwiftError(message: "Cannot find RSD adapter")
-				}
-				
-				guard let handshake = self._heartbeat.handshake else {
-					throw IDeviceSwiftError(message: "Cannot find RSD handshake")
-				}
-	
-				let installation_proxy_connect_tcp_result = installation_proxy_connect_rsd(adapter, handshake, &installproxy)
+				let installation_proxy_connect_tcp_result = installation_proxy_connect_rsd(self._heartbeat.adapter, self._heartbeat.handshake, &installproxy)
 				guard installation_proxy_connect_tcp_result == nil else {
 					throw IDeviceSwiftError(installation_proxy_connect_tcp_result)
 				}
@@ -142,9 +134,17 @@ extension InstallationAppProxy {
 		var springServices: SpringBoardServicesClientHandle?
 		
 		return try await Task.detached(priority: .userInitiated) {
-			let springboard_services_connect_result = springboard_services_connect(HeartbeatManager.shared.provider, &springServices)
-			guard springboard_services_connect_result == nil else {
-				throw IDeviceSwiftError(springboard_services_connect_result)
+			
+			if HeartbeatManager.shared.isRsd {
+				let springboard_services_connect_result = springboard_services_connect_rsd(HeartbeatManager.shared.adapter, HeartbeatManager.shared.handshake, &springServices)
+				guard springboard_services_connect_result == nil else {
+					throw IDeviceSwiftError(springboard_services_connect_result)
+				}
+			} else {
+				let springboard_services_connect_result = springboard_services_connect(HeartbeatManager.shared.provider, &springServices)
+				guard springboard_services_connect_result == nil else {
+					throw IDeviceSwiftError(springboard_services_connect_result)
+				}
 			}
 			
 			var outResult: UnsafeMutableRawPointer?
