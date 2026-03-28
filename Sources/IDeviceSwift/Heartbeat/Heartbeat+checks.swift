@@ -93,4 +93,18 @@ extension HeartbeatManager {
 		
 		return pairingFile
 	}
+	
+	func getPairingRsd() -> RpPairingFileHandle? {
+		guard fileManager.fileExists(atPath: Self.pairingFile()) else {
+			return nil
+		}
+		
+		var pairingFile: RpPairingFileHandle?
+		
+		guard rp_pairing_file_read(Self.pairingFile(), &pairingFile) == nil else {
+			return nil
+		}
+		
+		return pairingFile
+	}
 }

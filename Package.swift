@@ -13,10 +13,6 @@ let package = Package(
 			targets: ["IDevice"]
 		),
 		.library(
-			name: "plist",
-			targets: ["plist"]
-		),
-		.library(
 			name: "IDeviceSwift",
 			targets: ["IDeviceSwift"]
 		),
@@ -26,13 +22,9 @@ let package = Package(
 			name: "IDevice",
 			path: "Frameworks/IDevice.xcframework"
 		),
-		.binaryTarget(
-			name: "plist",
-			path: "Frameworks/plist.xcframework"
-		),
 		.target(
 			name: "IDeviceSwift",
-			dependencies: ["IDevice", "plist"]
+			dependencies: ["IDevice"]
 		),
 	]
 )

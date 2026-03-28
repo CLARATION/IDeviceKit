@@ -30,13 +30,19 @@ public class InstallationProxy: Identifiable, ObservableObject {
 		var fileHandle: AfcFileHandle?
 		var installproxy: InstallationProxyClientHandle?
 		
-		try await Task.detached(priority: .userInitiated) {
+		try await Task.detached(priority: .utility) {
 			guard FileManager.default.fileExists(atPath: HeartbeatManager.pairingFile()) else {
 				throw IDeviceSwiftError(message: "Missing Pairing")
 			}
 			
-			guard await self._heartbeat.checkSocketConnection().isConnected else {
-				throw IDeviceSwiftError(message: "Missing Pairing")
+			if await self._heartbeat.isRsd {
+				guard await self._heartbeat.ensureRSDTunnel() else {
+					throw IDeviceSwiftError(message: "Missing Pairing")
+				}
+			} else {
+				guard await self._heartbeat.checkSocketConnection().isConnected else {
+					throw IDeviceSwiftError(message: "Missing Pairing")
+				}
 			}
 			
 			defer {
@@ -45,12 +51,27 @@ public class InstallationProxy: Identifiable, ObservableObject {
 			}
 			
 			let heartbeat = await self._heartbeat
-			guard let provider = heartbeat.provider else {
-				throw IDeviceSwiftError(message: "Cannot connect to AFC")
-			}
 			
-			guard afc_client_connect(provider, &afcClient) == nil else {
-				throw IDeviceSwiftError(message: "Cannot connect to AFC")
+			if heartbeat.isRsd {
+				guard let adapter = heartbeat.adapter else {
+					throw IDeviceSwiftError(message: "Cannot find RSD adapter")
+				}
+				
+				guard let handshake = heartbeat.handshake else {
+					throw IDeviceSwiftError(message: "Cannot find RSD handshake")
+				}
+	
+				guard afc_client_connect_rsd(adapter, handshake, &afcClient) == nil else {
+					throw IDeviceSwiftError(message: "Cannot connect to AFC")
+				}
+			} else {
+				guard let provider = heartbeat.provider else {
+					throw IDeviceSwiftError(message: "Cannot find TCP provider")
+				}
+				
+				guard afc_client_connect(provider, &afcClient) == nil else {
+					throw IDeviceSwiftError(message: "Cannot connect to AFC")
+				}
 			}
 			
 			let stagingDir = "PublicStaging"
@@ -60,6 +81,8 @@ public class InstallationProxy: Identifiable, ObservableObject {
 				throw IDeviceSwiftError(afc_make_directory_result)
 			}
 			
+			print("1")
+			
 			let remoteDir = "/\(stagingDir)/\(self._uuid).ipa"
 			
 			let afc_file_open_result = afc_file_open(afcClient, remoteDir, AfcWrOnly, &fileHandle)
@@ -67,15 +90,17 @@ public class InstallationProxy: Identifiable, ObservableObject {
 				throw IDeviceSwiftError(afc_file_open_result)
 			}
 			
+			print("2")
+			
 			try await self._updateStatus(with: .sendingPayload)
 			
 			guard let fileHandle = fileHandle else {
 				throw IDeviceSwiftError(message: "Missing File Handle")
 			}
-
+			
 			let data = try Data(contentsOf: url)
 			let totalSize = data.count
-			let chunkSize = 64 * 1024 // 64kb
+			let chunkSize = 64 * 1024 * 1024 // 67mb
 			var totalBytesWritten = 0
 			
 			guard let rawBuffer = data.withUnsafeBytes({ $0.baseAddress })?.assumingMemoryBound(to: UInt8.self) else {
@@ -98,6 +123,8 @@ public class InstallationProxy: Identifiable, ObservableObject {
 				try await self._updateUploadProgress(with: progress)
 			}
 			
+			print(2)
+			
 			let afc_file_close_result = afc_file_close(fileHandle)
 			guard afc_file_close_result == nil else {
 				throw IDeviceSwiftError(afc_file_close_result)
@@ -105,10 +132,33 @@ public class InstallationProxy: Identifiable, ObservableObject {
 			
 			try await self._updateStatus(with: .installing)
 			
-			let installation_proxy_connect_tcp_result = installation_proxy_connect_tcp(provider, &installproxy)
-			guard installation_proxy_connect_tcp_result == nil else {
-				throw IDeviceSwiftError(installation_proxy_connect_tcp_result)
+			
+			if heartbeat.isRsd {
+				guard let adapter = heartbeat.adapter else {
+					throw IDeviceSwiftError(message: "Cannot find RSD adapter")
+				}
+				
+				guard let handshake = heartbeat.handshake else {
+					throw IDeviceSwiftError(message: "Cannot find RSD handshake")
+				}
+				
+				print(3)
+				
+				let installation_proxy_connect_rsd_result = installation_proxy_connect_rsd(adapter, handshake, &installproxy)
+				guard installation_proxy_connect_rsd_result == nil else {
+					throw IDeviceSwiftError(installation_proxy_connect_rsd_result)
+				}
+			} else {
+				guard let provider = heartbeat.provider else {
+					throw IDeviceSwiftError(message: "Cannot find TCP provider")
+				}
+				let installation_proxy_connect_result = installation_proxy_connect(provider, &installproxy)
+				guard installation_proxy_connect_result == nil else {
+					throw IDeviceSwiftError(installation_proxy_connect_result)
+				}
 			}
+			
+			print(4)
 			
 			let installError: UnsafeMutablePointer<IdeviceFfiError>? = remoteDir.withCString { cString in
 				let context = Unmanaged.passUnretained(self).toOpaque()

@@ -36,25 +36,45 @@ public class SystemLogManager: NSObject {
 			throw IDeviceSwiftError(message: "Missing Pairing")
 		}
 		
-		guard self._heartbeat.checkSocketConnection().isConnected else {
-			throw IDeviceSwiftError(message: "Missing Pairing")
+		if !self._heartbeat.isRsd {
+			guard self._heartbeat.checkSocketConnection().isConnected else {
+				throw IDeviceSwiftError(message: "Missing Pairing")
+			}
+		} else {
+			guard self._heartbeat.ensureRSDTunnel() else {
+				throw IDeviceSwiftError(message: "Missing Pairing")
+			}
 		}
 		
 		guard (self._heartbeat.provider != nil) else {
 			throw IDeviceSwiftError(message: "Missing Pairing")
 		}
 	}
+	
 	/// Connects to syslog relay
 	public func syslog_relay() async throws {
 		try await Task.detached(priority: .utility) {
 			try await self._connect()
 			
-			let syslog_relay_connect_tcp_result = syslog_relay_connect_tcp(self._heartbeat.provider, &self.syslogClient)
-			guard syslog_relay_connect_tcp_result == nil else {
-				throw IDeviceSwiftError(syslog_relay_connect_tcp_result)
+			if self._heartbeat.isRsd {
+				guard let adapter = self._heartbeat.adapter else {
+					throw IDeviceSwiftError(message: "Cannot find RSD adapter")
+				}
+				
+				guard let handshake = self._heartbeat.handshake else {
+					throw IDeviceSwiftError(message: "Cannot find RSD handshake")
+				}
+				
+				let syslog_relay_connect_tcp_result = syslog_relay_connect_rsd(adapter, handshake, &self.syslogClient)
+				guard syslog_relay_connect_tcp_result == nil else {
+					throw IDeviceSwiftError(syslog_relay_connect_tcp_result)
+				}
+			} else {
+				let syslog_relay_connect_tcp_result = syslog_relay_connect_tcp(self._heartbeat.provider, &self.syslogClient)
+				guard syslog_relay_connect_tcp_result == nil else {
+					throw IDeviceSwiftError(syslog_relay_connect_tcp_result)
+				}
 			}
-			
-			NSLog("we're going?")
 					
 			self.isStreaming = true
 			

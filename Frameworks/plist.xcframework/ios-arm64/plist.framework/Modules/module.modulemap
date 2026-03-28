@@ -1,6 +1,0 @@
-framework module plist {
-  umbrella header "plist.h"
-
-  export *
-  module * { export * }
-}
